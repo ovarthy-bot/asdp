@@ -5,6 +5,43 @@
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Uçak Bakım İş Planlama Sistemi – v19.3</title>
 <style>
+
+  /* --- YENİ EKLENEN EV BUTONU STİLİ --- */
+.home-btn {
+  position: fixed;
+  top: 15px;
+  left: 15px;
+  background: linear-gradient(135deg, var(--accent), #2563eb);
+  color: #fff;
+  text-decoration: none;
+  font-size: 24px;
+  width: 45px;
+  height: 45px;
+  border-radius: 50%; /* Yuvarlak buton */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  z-index: 9999; /* Her şeyin üstünde dursun */
+  border: 1px solid var(--border);
+  transition: transform 0.2s;
+}
+
+.home-btn:hover {
+  transform: scale(1.1);
+  filter: brightness(1.1);
+}
+
+@media(max-width:640px){
+  .home-btn {
+    width: 36px;
+    height: 36px;
+    font-size: 18px;
+    top: 10px;
+    left: 10px;
+  }
+}
+  
 /* Basit, temiz stil */
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -116,6 +153,7 @@ input[type="text"],input[type="number"],input[type="time"]{flex:1;padding:10px;b
 </style>
 </head>
 <body>
+  <a href="https://ovarthy-bot.github.io/navigasyon/" class="home-btn" title="Ana Sayfaya Git">🏠</a>
 <div class="container" id="container">
   <header>
     <h1>✈️ Adam Saat Dağıtma Uygulaması – v19.3</h1>

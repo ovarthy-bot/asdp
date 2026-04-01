@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Uçak Bakım İş Planlama Sistemi – v19.3</title>
+<title>Uçak Bakım İş Planlama Sistemi – v19.4</title>
 <style>
 
   /* --- YENİ EKLENEN EV BUTONU STİLİ --- */
@@ -70,6 +70,7 @@ input[type="text"],input[type="number"],input[type="time"]{flex:1;padding:10px;b
 .warning{background:rgba(239,68,68,0.08);border-left:4px solid var(--danger);padding:12px;border-radius:8px;color:var(--danger);font-weight:600;margin-top:12px}
 .note{background:rgba(16,185,129,0.06);border-left:4px solid var(--ok);padding:10px;border-radius:8px;color:var(--ok);margin-top:12px;font-weight:600}
 .footer-warning{background:rgba(239,68,68,0.08);border-left:4px solid var(--danger);padding:12px;border-radius:8px;color:var(--danger);font-weight:700;margin-top:14px}
+.capacity-info{background:rgba(59,130,246,0.08);border-left:4px solid var(--accent);padding:12px;border-radius:8px;color:var(--accent);font-weight:600;margin-top:12px}
 
 .table th:nth-child(1), .table td:nth-child(1) { width: 20%; }
 .table th:nth-child(2), .table td:nth-child(2) { width: 65%; }
@@ -156,7 +157,7 @@ input[type="text"],input[type="number"],input[type="time"]{flex:1;padding:10px;b
   <a href="https://ovarthy-bot.github.io/navigasyon/" class="home-btn" title="Ana Sayfaya Git">🏠</a>
 <div class="container" id="container">
   <header>
-    <h1>✈️ Adam Saat Dağıtma Uygulaması – v19.3</h1>
+    <h1>✈️ Adam Saat Dağıtma Uygulaması – v19.4</h1>
     <div class="small"> |Geliştirici: ovar@thy.com| </div>
   </header>
 
@@ -201,7 +202,7 @@ input[type="text"],input[type="number"],input[type="time"]{flex:1;padding:10px;b
   <div id="results"></div>
   
   <div class="card" style="grid-column: 1 / -1;">
-    <button class="btn-plan" id="planBtn">🚀 İş Planını Oluştur (v19.3)</button>
+    <button class="btn-plan" id="planBtn">🚀 İş Planını Oluştur (v19.4)</button>
   </div>
 </div>
   
@@ -450,30 +451,116 @@ function plan(){
   if(_workEnd_offset <= 0) { resultsDiv.innerHTML = `<div class="warning">Vardiya çok kısa / mola çok uzun - plan yapılamıyor.</div>`; return; }
 
   const HEAD_MIN = 15;
-  const techObjs = technicians.map(name => ({ name, segments:[], totalMin:0 }));
+  const round15 = m => Math.round(m / 15) * 15;  // En yakın 15'e yuvarla
+  const floor15 = m => Math.floor(m / 15) * 15;   // Aşağı 15'e yuvarla
+  const ceil15x = m => Math.ceil(m / 15) * 15;    // Yukarı 15'e yuvarla
   
-  let tasksCopy = tasks.map((t, idx) => {
+  // ═══════════════════════════════════════════════════════════════
+  // ADIM 1: Kapasite hesapla, orantılı küçültme ve 15dk yuvarlama
+  // ═══════════════════════════════════════════════════════════════
+  
+  const totalCapacityMin = technicians.length * _workEnd_offset;
+  
+  // Ham iş sürelerini hesapla
+  let rawTasks = tasks.map((t, idx) => {
     const inputHours = parseFloat(t.hours) || 0;
     const rawMin = Math.round(inputHours * 60);
     const headAlloc = Math.min(HEAD_MIN, rawMin);
     const techWorkMin = Math.max(0, rawMin - headAlloc);
-    
-    // ✅ DÜZELTİLDİ: 15'e yuvarlama yapma, orijinal süreyi koru
-    // Sadece blok atarken 15'in katlarına böleceğiz
-    
     return { 
       id: idx, 
       name: t.name, 
-      inputHours: inputHours,
-      rawMin: rawMin,
-      headAlloc: headAlloc,
-      techWorkMin: techWorkMin  // Yuvarlanmamış hali
+      inputHours,
+      rawMin,
+      headAlloc,
+      techWorkMinOriginal: techWorkMin,   // Orijinal teknisyen işi (ham)
+      techWorkMinBeforeRound: techWorkMin, // Küçültme sonrası, yuvarlama öncesi
+      techWorkMin: techWorkMin             // Final (küçültme + yuvarlama)
     };
   });
 
+  const totalTechWorkNeeded = rawTasks.reduce((s, t) => s + t.techWorkMinOriginal, 0);
+  
+  let reductionRatio = 1.0;
+  let capacityExceeded = false;
+  
+  if (totalTechWorkNeeded > totalCapacityMin && totalTechWorkNeeded > 0) {
+    capacityExceeded = true;
+    reductionRatio = (totalCapacityMin * 0.95) / totalTechWorkNeeded;
+    
+    // Orantılı küçültme
+    rawTasks.forEach(task => {
+      if (task.techWorkMinOriginal > 0) {
+        const reduced = Math.max(
+          Math.min(15, task.techWorkMinOriginal), 
+          Math.round(task.techWorkMinOriginal * reductionRatio)
+        );
+        task.techWorkMinBeforeRound = reduced;
+        task.techWorkMin = reduced;
+      }
+    });
+  }
+
+  // ── 15dk katına yuvarlama ──
+  // Strateji: Her işi en yakın 15'e yuvarla.
+  // Toplam yuvarlanmış değer kapasiteyi aşarsa, yukarı yuvarlananları aşağı çek.
+  const roundingAdjustments = [];
+  
+  rawTasks.forEach(task => {
+    if (task.techWorkMin <= 0) return;
+    
+    const before = task.techWorkMin;
+    let rounded = round15(before);
+    
+    // Minimum 15dk (sıfıra düşmesin)
+    if (rounded === 0 && before > 0) rounded = 15;
+    
+    task.techWorkMin = rounded;
+    
+    const diff = rounded - task.techWorkMinBeforeRound;
+    if (diff !== 0) {
+      roundingAdjustments.push({
+        name: task.name,
+        before: task.techWorkMinBeforeRound,
+        after: rounded,
+        diff: diff  // + = yukarı yuvarlandı, - = aşağı yuvarlandı
+      });
+    }
+  });
+
+  // Yuvarlama sonrası kapasite kontrolü
+  const totalAfterRound = rawTasks.reduce((s, t) => s + t.techWorkMin, 0);
+  if (totalAfterRound > totalCapacityMin) {
+    // Yukarı yuvarlanan işleri, fark büyükten küçüğe sırayla aşağı çek
+    const upRounded = rawTasks
+      .filter(t => t.techWorkMin > floor15(t.techWorkMinBeforeRound) && t.techWorkMin > 15)
+      .sort((a, b) => (b.techWorkMin - b.techWorkMinBeforeRound) - (a.techWorkMin - a.techWorkMinBeforeRound));
+    
+    let excess = totalAfterRound - Math.floor(totalCapacityMin * 0.95 / 15) * 15;
+    for (const task of upRounded) {
+      if (excess <= 0) break;
+      const floored = Math.max(15, floor15(task.techWorkMinBeforeRound));
+      if (floored < task.techWorkMin) {
+        const save = task.techWorkMin - floored;
+        task.techWorkMin = floored;
+        excess -= save;
+        // Adjustment güncelle
+        const adj = roundingAdjustments.find(a => a.name === task.name);
+        if (adj) { adj.after = floored; adj.diff = floored - task.techWorkMinBeforeRound; }
+      }
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // ADIM 2: İşleri teknisyenlere dağıt – tüm bloklar 15dk katı
+  // ═══════════════════════════════════════════════════════════════
+
+  const techObjs = technicians.map(name => ({ name, segments:[], totalMin:0 }));
+  
+  let tasksCopy = rawTasks.slice();
+
   const taskSegments = new Map();
   const unallocated = [];
-  const reducedTasks = [];
 
   tasksCopy.sort((a, b) => b.techWorkMin - a.techWorkMin);
 
@@ -483,77 +570,61 @@ function plan(){
 
     if(techWork === 0) continue;
 
-    // ✅ DÜZELTİLDİ: İşi dağıtırken toplam süreyi aşmayacak şekilde yuvarlama
-    let remainingWork = techWork;
-    let totalAllocated = 0;  // Toplam atanan süreyi takip et
+    let remainingWork = techWork; // Zaten 15'in katı
     
     while(remainingWork > 0) {
-      const targetBlockSize = Math.max(30, Math.ceil(remainingWork / Math.max(1, technicians.length)));
-      const currentBlock = Math.min(targetBlockSize, remainingWork);
+      // Blok boyutu hesapla – her zaman 15'in katı
+      let targetBlockSize = Math.max(30, Math.ceil(remainingWork / Math.max(1, technicians.length)));
+      targetBlockSize = ceil15x(targetBlockSize);
       
-      // ✅ Son blokta kalan süreyi aşmamak için kontrol
-      let roundedBlock;
-      if (remainingWork <= 15) {
-        roundedBlock = remainingWork;  // Son küçük parça için yuvarlama yapma
-      } else {
-        roundedBlock = ceil15(currentBlock);
-        // Eğer yuvarlanan değer kalan işten fazlaysa, kalan işi al
-        if (roundedBlock > remainingWork) {
-          roundedBlock = remainingWork;
-        }
-      }
+      let blockSize = Math.min(targetBlockSize, remainingWork);
+      // 15'in katına yuvarla (remainingWork zaten 15 katı, ama garanti olsun)
+      blockSize = Math.max(15, round15(blockSize));
+      if (blockSize > remainingWork) blockSize = remainingWork;
       
       techObjs.sort((a, b) => a.totalMin - b.totalMin);
       
       let placed = false;
       for(let ti = 0; ti < techObjs.length; ti++){
         const tech = techObjs[ti];
-        
-        const attempt = tryScheduleOnTech(tech, roundedBlock, task.id, task.name);
+        const attempt = tryScheduleOnTech(tech, blockSize, task.id, task.name);
         if(attempt){
           taskSegments.get(task.id).push({ techIndex: ti, start: attempt.start, end: attempt.end });
-          remainingWork -= roundedBlock;
-          totalAllocated += roundedBlock;
+          remainingWork -= blockSize;
           placed = true;
           break;
         }
       }
       
       if(!placed) {
-        // Daha küçük blokla dene, ama yine toplam süreyi aşma
-        const smallerBlock = Math.min(ceil15(roundedBlock * 0.7), remainingWork);
-        if(smallerBlock >= 15 || remainingWork < 15) {
-          const tryBlock = remainingWork < 15 ? remainingWork : smallerBlock;
-          for(let ti = 0; ti < techObjs.length; ti++){
-            const tech = techObjs[ti];
-            const attempt = tryScheduleOnTech(tech, tryBlock, task.id, task.name);
-            if(attempt){
-              taskSegments.get(task.id).push({ techIndex: ti, start: attempt.start, end: attempt.end });
-              remainingWork -= tryBlock;
-              totalAllocated += tryBlock;
-              placed = true;
-              if(tryBlock !== roundedBlock) {
-                reducedTasks.push({
-                  task: task.name,
-                  original: roundedBlock,
-                  reduced: tryBlock,
-                  rate: (roundedBlock - tryBlock) / roundedBlock
-                });
-              }
-              break;
-            }
+        // Daha küçük blokla dene – yine 15'in katı
+        let smallerBlock = Math.max(15, floor15(blockSize * 0.7));
+        if (smallerBlock > remainingWork) smallerBlock = remainingWork;
+        
+        for(let ti = 0; ti < techObjs.length; ti++){
+          const tech = techObjs[ti];
+          const attempt = tryScheduleOnTech(tech, smallerBlock, task.id, task.name);
+          if(attempt){
+            taskSegments.get(task.id).push({ techIndex: ti, start: attempt.start, end: attempt.end });
+            remainingWork -= smallerBlock;
+            placed = true;
+            break;
           }
         }
       }
       
       if(!placed) {
-        unallocated.push({ task: task.name, minutes: roundedBlock, reason: 'Yer yok' });
+        unallocated.push({ task: task.name, minutes: remainingWork, reason: 'Yer yok' });
         break;
       }
     }
   }
 
   mergeAndRecompute(techObjs);
+
+  // ═══════════════════════════════════════════════════════════════
+  // ADIM 3: Dengeleme (mevcut balancing algoritması)
+  // ═══════════════════════════════════════════════════════════════
 
   function getTotals(){ return techObjs.map((t,i)=>({ idx:i, total:t.totalMin })); }
   
@@ -607,6 +678,10 @@ function plan(){
   }
 
   mergeAndRecompute(techObjs);
+
+  // ═══════════════════════════════════════════════════════════════
+  // ADIM 4: B1 Teknisyen ataması
+  // ═══════════════════════════════════════════════════════════════
 
   const taskFinalEnd = new Map();
   for(const task of tasksCopy){
@@ -684,6 +759,10 @@ function plan(){
     headCursor = prefEnd; 
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  // ADIM 5: Sonuçları göster
+  // ═══════════════════════════════════════════════════════════════
+
   const perTech = technicians.map(n => ({ name: n, segs: [], total: 0 }));
   techObjs.forEach((t, idx) => {
     t.segments.forEach(s => {
@@ -694,11 +773,11 @@ function plan(){
       if (_breakExists) {
         const segmentStart = real.startReal;
         const segmentEnd = real.endReal;
-        const breakStart = _breakS_real;
-        const breakEnd = _breakE_real;
-        if (segmentStart < breakEnd && segmentEnd > breakStart) {
-          const overlapStart = Math.max(segmentStart, breakStart);
-          const overlapEnd = Math.min(segmentEnd, breakEnd);
+        const bkStart = _breakS_real;
+        const bkEnd = _breakE_real;
+        if (segmentStart < bkEnd && segmentEnd > bkStart) {
+          const overlapStart = Math.max(segmentStart, bkStart);
+          const overlapEnd = Math.min(segmentEnd, bkEnd);
           const overlapDuration = Math.max(0, overlapEnd - overlapStart);
           segmentDuration -= overlapDuration;
         }
@@ -712,6 +791,68 @@ function plan(){
   const totalInputHours = tasks.reduce((s,t)=>s + (parseFloat(t.hours)||0),0);
   html += `<div class="card"><div class="small">Toplam İş: <strong>${tasks.length}</strong> – Girdi Toplam Süre: <strong>${totalInputHours.toFixed(2)} saat</strong></div></div>`;
   
+  // ── Kapasite bilgisi ve küçültme/yuvarlama raporu ──
+  if (capacityExceeded) {
+    const capHours = (totalCapacityMin / 60).toFixed(2);
+    const needHours = (totalTechWorkNeeded / 60).toFixed(2);
+    const reductionPct = ((1 - reductionRatio) * 100).toFixed(1);
+    const totalPlanned = rawTasks.reduce((s, t) => s + t.techWorkMin, 0);
+    const plannedHours = (totalPlanned / 60).toFixed(2);
+    
+    let detailHtml = '<table class="table" style="margin-top:10px"><tr><th>İş</th><th>Orijinal → Planlanan</th><th>Fark</th></tr>';
+    
+    tasksCopy.forEach(task => {
+      if (task.techWorkMinOriginal > 0) {
+        const origH = (task.techWorkMinOriginal / 60).toFixed(2);
+        const newH = (task.techWorkMin / 60).toFixed(2);
+        const diffMin = task.techWorkMinOriginal - task.techWorkMin;
+        const diffH = (diffMin / 60).toFixed(2);
+        const taskPct = ((diffMin / task.techWorkMinOriginal) * 100).toFixed(1);
+        const roundNote = (task.techWorkMin !== task.techWorkMinBeforeRound) 
+          ? ` <span style="color:#f59e0b;font-size:0.8em">(±15dk yuvarlama)</span>` : '';
+        detailHtml += `<tr><td><strong>${task.name}</strong></td><td>${origH} → ${newH} saat${roundNote}</td><td>-${diffH} saat (${taskPct}%)</td></tr>`;
+      }
+    });
+    detailHtml += '</table>';
+    
+    html += `<div class="capacity-info">
+      <strong>📊 Kapasite Aşımı – Orantılı Küçültme + 15dk Yuvarlama Uygulandı</strong><br>
+      <span class="small" style="color:var(--muted)">
+        Toplam teknisyen kapasitesi: <strong>${capHours} saat</strong> (${technicians.length} kişi × ${minutesToHoursStr(_workEnd_offset)} saat)<br>
+        Toplam iş yükü (orijinal): <strong>${needHours} saat</strong><br>
+        Planlanan toplam (küçültme + yuvarlama): <strong>${plannedHours} saat</strong><br>
+        <span style="color:var(--danger)">➜ Tüm işler orantılı olarak <strong>~%${reductionPct}</strong> küçültüldü, süreler 15dk katına yuvarlandı.</span>
+      </span>
+      ${detailHtml}
+    </div>`;
+  } else {
+    const capHours = (totalCapacityMin / 60).toFixed(2);
+    const needHours = (totalTechWorkNeeded / 60).toFixed(2);
+    const totalPlanned = rawTasks.reduce((s, t) => s + t.techWorkMin, 0);
+    const plannedHours = (totalPlanned / 60).toFixed(2);
+    const usagePct = totalCapacityMin > 0 ? ((totalPlanned / totalCapacityMin) * 100).toFixed(1) : '0';
+    
+    // Kapasite yeterli olsa bile yuvarlama raporu göster
+    const hasRounding = roundingAdjustments.length > 0;
+    let roundingNote = '';
+    if (hasRounding) {
+      roundingNote = '<br><span style="color:#f59e0b">⚙️ 15dk katına yuvarlama uygulandı:</span><br>';
+      roundingNote += roundingAdjustments.map(adj => {
+        const sign = adj.diff > 0 ? '+' : '';
+        return `<span style="color:var(--muted);font-size:0.85em">  • ${adj.name}: ${(adj.before/60).toFixed(2)} → ${(adj.after/60).toFixed(2)} saat (${sign}${adj.diff} dk)</span>`;
+      }).join('<br>');
+    }
+    
+    html += `<div class="note">
+      <strong>✅ Kapasite Yeterli</strong><br>
+      <span class="small" style="color:var(--muted)">
+        Kapasite: ${capHours} saat – Orijinal ihtiyaç: ${needHours} saat – Planlanan: ${plannedHours} saat – Kullanım: %${usagePct}
+      </span>
+      ${roundingNote}
+    </div>`;
+  }
+
+  // ── Teknisyen programı tablosu ──
   let techHtml = `<div class="card"><h2>👷 Teknisyenlerin Programı</h2><table class="table"><tr><th>Teknisyen</th><th>İşler (zaman aralıkları)</th><th>Toplam (saat)</th></tr>`;
   perTech.forEach(p=>{
     p.segs.sort((a,b)=>a.start - b.start);
@@ -721,6 +862,7 @@ function plan(){
   techHtml += `</table></div>`;
   html += techHtml;
 
+  // ── B1 Teknisyen ──
   const headHtml = headAssignments.length ? headAssignments.map(h=>`📌 <strong>${h.taskName}</strong> : ${m2t(workToReal(h.start))} - ${m2t(workToReal(h.end))}`).join('<br>') : '<div class="small">Başteknisyene atanmış görev yok veya atanamadı.</div>';
   html += `<div class="card"><h2>👑 B1 Teknisyen (${headTech})</h2>${headHtml}</div>`;
 
@@ -740,19 +882,12 @@ function plan(){
     html += `<div class="warning"><strong>⚠️ Atanamayan İşler (B1 Teknisyen)</strong><br>${headUnallocHtml}</div>`;
   }
 
-  if (reducedTasks.length > 0) {
-    const reducedHtml = reducedTasks.map(r => {
-      if (r.reduced) {
-        const origHrs = (r.original / 60).toFixed(2).replace('.', ',');
-        const newHrs = (r.reduced / 60).toFixed(2).replace('.', ',');
-        const diffHrs = (r.original/60 - r.reduced/60).toFixed(2).replace('.', ',');
-        const pctText = r.rate ? ` (%${Math.round(r.rate * 100)} azaltma ile planlandı)` : '';
-        return `<div class="small">${r.task} – ${origHrs} ⇒ ${newHrs} saat (${diffHrs} saat arttı)${pctText}</div>`;
-      } else {
-        return `<div class="small">${r.task} – Azaltma denemeleri başarısız oldu.</div>`;
-      }
+  if (unallocated.length > 0) {
+    const unallocHtml = unallocated.map(u => {
+      const unallocHours = (u.minutes / 60).toFixed(2).replace('.', ',');
+      return `<div class="small">${u.task} – ${unallocHours} saat atanamadı (${u.reason})</div>`;
     }).join('');
-    html += `<div class="note" style="border-left-color:#f59e0b;color:#f97316"><strong>⚙️ Süresi Düşürülen İşler</strong><br>${reducedHtml}</div>`;
+    html += `<div class="warning"><strong>⚠️ Atanamayan İşler (Teknisyen)</strong><br>${unallocHtml}</div>`;
   }
 
   html += `<div class="footer-warning">⚠️ Bu planlama bir öneridir. Gerçek durumlarda İşyeri prosedürlerine ve operasyonel ihtiyaçlara göre değişiklik yapılabilir.</div>`;

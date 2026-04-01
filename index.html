@@ -681,6 +681,9 @@ function plan(){
 
   // ═══════════════════════════════════════════════════════════════
   // ADIM 4: B1 Teknisyen ataması
+  //   1) Dolu saatleri blokla
+  //   2) Teknisyenlere atanamayan işleri B1'e yerleştir
+  //   3) Her iş için 15dk onay süresini işin SONUNA doğru yerleştir
   // ═══════════════════════════════════════════════════════════════
 
   const taskFinalEnd = new Map();
@@ -699,12 +702,11 @@ function plan(){
     taskFinalEnd.set(task.id, endMax);
   }
 
-  let headCursor = workStart_offset;
-  const headAssignments = [];
-  const headUnallocated = [];
+  // B1'i bir zamanlama nesnesi olarak oluştur
+  const headObj = { name: headTech, segments: [], totalMin: 0 };
 
-  const headWorkBlocks = [];
-  const headBlockInputs = load('asdp_headBlocks', []); 
+  // Dolu saatleri B1'in segmentlerine önceden ekle
+  const headBlockInputs = load('asdp_headBlocks', []);
   for (const block of headBlockInputs) {
     const s_real = t2m(block.start);
     const e_real = t2m(block.end);
@@ -714,13 +716,113 @@ function plan(){
     const e_work = realToWork(e_real);
     
     if (s_work !== null && e_work !== null && e_work > s_work) {
-      headWorkBlocks.push({ start: s_work, end: e_work });
+      headObj.segments.push({ start: s_work, end: e_work, taskId: -1, taskName: 'DOLU' });
     } else if (s_work !== null && e_work === null) {
-      headWorkBlocks.push({ start: s_work, end: _workEnd_offset });
+      headObj.segments.push({ start: s_work, end: _workEnd_offset, taskId: -1, taskName: 'DOLU' });
     }
   }
-  headWorkBlocks.sort((a,b) => a.start - b.start); 
 
+  // ── B1'de belirli bir zamana yakın boşluk bulan fonksiyon ──
+  // İşin sonuna yakın yerleştirmek için kullanılır
+  function tryScheduleOnTechNear(tech, duration, taskId, taskName, preferredStart) {
+    tech.segments.sort((a,b) => a.start - b.start);
+    
+    // Tüm boşlukları bul
+    const gaps = [];
+    let cursor = 0;
+    for (const seg of tech.segments) {
+      if (seg.start > cursor) {
+        gaps.push({ start: cursor, end: seg.start, size: seg.start - cursor });
+      }
+      cursor = Math.max(cursor, seg.end);
+    }
+    if (cursor < _workEnd_offset) {
+      gaps.push({ start: cursor, end: _workEnd_offset, size: _workEnd_offset - cursor });
+    }
+    
+    // Yeterli büyüklükteki boşlukları filtrele
+    const validGaps = gaps.filter(g => g.size >= duration);
+    if (validGaps.length === 0) return null;
+    
+    // preferredStart'a en yakın boşluğu bul
+    let bestGap = null;
+    let bestStart = null;
+    let bestDist = Infinity;
+    
+    for (const gap of validGaps) {
+      // Bu boşluk içinde preferredStart'a en yakın yerleştirme noktası
+      let startInGap = Math.max(gap.start, Math.min(preferredStart, gap.end - duration));
+      const dist = Math.abs(startInGap - preferredStart);
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestGap = gap;
+        bestStart = startInGap;
+      }
+    }
+    
+    if (bestGap && bestStart !== null) {
+      const s = bestStart;
+      const e = s + duration;
+      tech.segments.push({ start: s, end: e, taskId, taskName });
+      tech.totalMin += duration;
+      return { start: s, end: e };
+    }
+    return null;
+  }
+
+  // ── ADIM 4a: Atanamayan işleri B1'e yerleştir ──
+  const headOverflowAssignments = [];
+  const finalUnallocated = [];
+
+  for (const unalloc of unallocated) {
+    const task = tasksCopy.find(t => t.name === unalloc.task);
+    let remaining = unalloc.minutes;
+    
+    while (remaining > 0) {
+      let blockSize = remaining;
+      if (remaining >= 15) {
+        blockSize = Math.max(15, round15(remaining));
+        if (blockSize > remaining) blockSize = remaining;
+      }
+      
+      const attempt = tryScheduleOnTech(headObj, blockSize, task ? task.id : -2, unalloc.task);
+      if (attempt) {
+        headOverflowAssignments.push({
+          taskId: task ? task.id : -2,
+          taskName: unalloc.task,
+          start: attempt.start,
+          end: attempt.end,
+          type: 'overflow'
+        });
+        remaining -= blockSize;
+      } else {
+        // Daha küçük blokla dene
+        let smallerBlock = Math.max(15, floor15(blockSize * 0.5));
+        if (smallerBlock > remaining) smallerBlock = remaining;
+        
+        const attempt2 = tryScheduleOnTech(headObj, smallerBlock, task ? task.id : -2, unalloc.task);
+        if (attempt2) {
+          headOverflowAssignments.push({
+            taskId: task ? task.id : -2,
+            taskName: unalloc.task,
+            start: attempt2.start,
+            end: attempt2.end,
+            type: 'overflow'
+          });
+          remaining -= smallerBlock;
+        } else {
+          finalUnallocated.push({ task: unalloc.task, minutes: remaining, reason: 'B1 kapasitesi de dolu' });
+          break;
+        }
+      }
+    }
+  }
+
+  // ── ADIM 4b: Her iş için 15dk B1 onay süresini İŞİN SONUNA DOĞRU yerleştir ──
+  const headAssignments = [];
+  const headUnallocated = [];
+
+  // İşleri bitiş zamanına göre sırala
   const tasksForHead = tasksCopy.slice().sort((a,b)=>{
     const A = taskFinalEnd.get(a.id), B = taskFinalEnd.get(b.id);
     if(A===null && B===null) return 0;
@@ -733,30 +835,21 @@ function plan(){
     const headNeeded = t.headAlloc;
     if(headNeeded <= 0) continue;
     
-    let prefStart = Math.max(headCursor, (taskFinalEnd.get(t.id) !== null ? taskFinalEnd.get(t.id) - headNeeded : headCursor));
-    if(prefStart < headCursor) prefStart = headCursor; 
-    let prefEnd = prefStart + headNeeded;
-
-    let adjusted = true;
-    while(adjusted) {
-      adjusted = false;
-      for (const block of headWorkBlocks) {
-        if (prefEnd > block.start && prefStart < block.end) { 
-          prefStart = block.end; 
-          prefEnd = prefStart + headNeeded;
-          adjusted = true; 
-          break; 
-        }
-      }
-    }
-
-    if(prefEnd > _workEnd_offset){
-      headUnallocated.push({ task: t.name, minutes: headNeeded, reason: 'Vardiya Bitişi / Mola' });
-      continue;
-    }
+    // Tercih: İşin teknisyen bitişine yakın yerleştir
+    const taskEnd = taskFinalEnd.get(t.id);
+    const preferredStart = (taskEnd !== null) ? Math.max(0, taskEnd - headNeeded) : 0;
     
-    headAssignments.push({ taskId: t.id, taskName: t.name, start: prefStart, end: prefEnd });
-    headCursor = prefEnd; 
+    // Önce tercih edilen zamana yakın dene
+    const attempt = tryScheduleOnTechNear(headObj, headNeeded, t.id, t.name, preferredStart);
+    if (attempt) {
+      headAssignments.push({ 
+        taskId: t.id, taskName: t.name, 
+        start: attempt.start, end: attempt.end,
+        type: 'headAlloc'
+      });
+    } else {
+      headUnallocated.push({ task: t.name, minutes: headNeeded, reason: 'B1 kapasitesi dolu' });
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -863,8 +956,40 @@ function plan(){
   html += techHtml;
 
   // ── B1 Teknisyen ──
-  const headHtml = headAssignments.length ? headAssignments.map(h=>`📌 <strong>${h.taskName}</strong> : ${m2t(workToReal(h.start))} - ${m2t(workToReal(h.end))}`).join('<br>') : '<div class="small">Başteknisyene atanmış görev yok veya atanamadı.</div>';
-  html += `<div class="card"><h2>👑 B1 Teknisyen (${headTech})</h2>${headHtml}</div>`;
+  // B1'in tüm segmentlerini topla (overflow + headAlloc), dolu blokları hariç tut
+  const allHeadSegs = headObj.segments
+    .filter(s => s.taskId !== -1) // Dolu blokları çıkar
+    .sort((a,b) => a.start - b.start);
+  
+  let headDisplayHtml = '';
+  if (allHeadSegs.length > 0) {
+    // Overflow (taşan iş) ve headAlloc (onay) ayrımını göster
+    const overflowIds = new Set(headOverflowAssignments.map(h => `${h.start}-${h.end}`));
+    
+    headDisplayHtml = allHeadSegs.map(s => {
+      const realStart = m2t(workToReal(s.start));
+      const realEnd = m2t(workToReal(s.end));
+      const isOverflow = overflowIds.has(`${s.start}-${s.end}`);
+      const icon = isOverflow ? '🔧' : '📌';
+      const label = isOverflow ? ' <span style="color:#f59e0b;font-size:0.8em">(taşan iş)</span>' : '';
+      return `${icon} <strong>${s.taskName}</strong> : ${realStart} - ${realEnd}${label}`;
+    }).join('<br>');
+  } else {
+    headDisplayHtml = '<div class="small">Başteknisyene atanmış görev yok.</div>';
+  }
+  
+  // B1 toplam çalışma saati (dolu bloklar hariç)
+  const headWorkTotal = allHeadSegs.reduce((s, seg) => s + (seg.end - seg.start), 0);
+  const headOverflowTotal = headOverflowAssignments.reduce((s, h) => s + (h.end - h.start), 0);
+  
+  html += `<div class="card"><h2>👑 B1 Teknisyen (${headTech})</h2>${headDisplayHtml}`;
+  if (headOverflowTotal > 0) {
+    html += `<div class="stat" style="margin-top:10px;border-left-color:#f59e0b">
+      🔧 Taşan iş yükü: <strong>${minutesToHoursStr(headOverflowTotal)} saat</strong> – 
+      Toplam B1 yükü: <strong>${minutesToHoursStr(headWorkTotal)} saat</strong>
+    </div>`;
+  }
+  html += `</div>`;
 
   if(headUnallocated.length > 0){
     const headUnallocatedByTask = {};
@@ -877,17 +1002,17 @@ function plan(){
     
     const headUnallocHtml = Object.values(headUnallocatedByTask).map(u => {
       const unallocHours = (u.totalMinutes / 60).toFixed(2).replace('.', ',');
-      return `<div class="small">${u.taskName} – B1 için ${unallocHours} saat atanamadı (Vardiya bitişi/mola)</div>`;
+      return `<div class="small">${u.taskName} – B1 için ${unallocHours} saat atanamadı</div>`;
     }).join('');
-    html += `<div class="warning"><strong>⚠️ Atanamayan İşler (B1 Teknisyen)</strong><br>${headUnallocHtml}</div>`;
+    html += `<div class="warning"><strong>⚠️ Atanamayan Onay Süreleri (B1)</strong><br>${headUnallocHtml}</div>`;
   }
 
-  if (unallocated.length > 0) {
-    const unallocHtml = unallocated.map(u => {
+  if (finalUnallocated.length > 0) {
+    const finalUnallocHtml = finalUnallocated.map(u => {
       const unallocHours = (u.minutes / 60).toFixed(2).replace('.', ',');
-      return `<div class="small">${u.task} – ${unallocHours} saat atanamadı (${u.reason})</div>`;
+      return `<div class="small">${u.task} – ${unallocHours} saat hiçbir yere atanamadı (${u.reason})</div>`;
     }).join('');
-    html += `<div class="warning"><strong>⚠️ Atanamayan İşler (Teknisyen)</strong><br>${unallocHtml}</div>`;
+    html += `<div class="warning"><strong>⚠️ Tamamen Atanamayan İşler</strong><br>${finalUnallocHtml}</div>`;
   }
 
   html += `<div class="footer-warning">⚠️ Bu planlama bir öneridir. Gerçek durumlarda İşyeri prosedürlerine ve operasyonel ihtiyaçlara göre değişiklik yapılabilir.</div>`;

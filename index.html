@@ -47,7 +47,7 @@ textarea{width:100%;min-height:90px;resize:vertical;font-family:inherit}
 .table td{padding:10px;border-bottom:1px solid var(--border);background:var(--panel);color:var(--text);font-size:.9rem}
 .warning{background:rgba(239,68,68,0.08);border-left:4px solid var(--danger);padding:12px;border-radius:8px;color:var(--danger);font-weight:600;margin-top:12px}
 .note{background:rgba(16,185,129,0.06);border-left:4px solid var(--ok);padding:10px;border-radius:8px;color:var(--ok);margin-top:12px;font-weight:600}
-.footer-warning{background:rgba(239,68,68,0.08);border-left:4px solid var(--danger);padding:12px;border-radius:8px;color:var(--danger);font-weight:700;margin-top:14px}
+.footer-warning{background:rgba(15,23,42,0.92);border-left:4px solid var(--border);padding:12px;border-radius:8px;color:var(--muted);font-weight:700;margin-top:14px}
 .capacity-info{background:rgba(59,130,246,0.08);border-left:4px solid var(--accent);padding:12px;border-radius:8px;color:var(--accent);font-weight:600;margin-top:12px}
 .attention{background:rgba(245,158,11,0.08);border-left:4px solid var(--warn);padding:12px;border-radius:8px;color:var(--warn);font-weight:600;margin-top:12px}
 
@@ -84,6 +84,11 @@ body.mode-group .all-only{display:none !important}
 .cov-list{display:flex;flex-direction:column;gap:6px;margin-top:6px}
 .cov-list .cov-row{display:flex;align-items:center;gap:10px;background:var(--panel);padding:8px 12px;border-radius:8px;border-left:4px solid var(--accent)}
 
+.program-seg{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:start;margin-bottom:4px;line-height:1.35}
+.program-seg:last-child{margin-bottom:0}
+.program-task{min-width:0;word-break:break-word;overflow-wrap:anywhere}
+.program-time{white-space:nowrap;color:var(--muted);font-weight:700;text-align:right}
+
 .table th:nth-child(1), .table td:nth-child(1) { width: 22%; }
 .table th:nth-child(2), .table td:nth-child(2) { width: 63%; }
 .table th:nth-child(3), .table td:nth-child(3) { width: 15%; }
@@ -92,12 +97,35 @@ body.mode-group .all-only{display:none !important}
   header{flex-direction:column;gap:10px}
   h1{font-size:1rem}
   .input-group:not(#tasks .input-group):not(#techs .input-group){flex-wrap:wrap}
-  #tasks .input-group, #techs .input-group{flex-wrap:nowrap}
+  #techs .input-group{flex-wrap:nowrap}
+  #tasks .input-group{
+    display:grid;
+    grid-template-columns:minmax(165px,1fr) 52px 38px 30px;
+    gap:5px;
+    align-items:center;
+  }
   .input-group label{width:100%;margin-bottom:4px;flex-basis:100%}
   .input-group input[type="time"]{flex-basis:100px;flex-grow:1}
-  #tasks .input-group input[type="text"]{flex:2;min-width:120px}
-  #tasks .input-group input[type="number"]{flex:1;min-width:80px}
-  #tasks .input-group .btn-del{flex:0 0 auto;padding:8px 10px}
+  #tasks .input-group input[type="text"]{width:100%;min-width:0;font-size:.92rem;padding:10px 8px}
+  #tasks .input-group input[type="number"]{width:52px;min-width:52px;font-size:.82rem;padding:10px 4px;text-align:center}
+  #tasks .input-group .open-toggle{
+    width:38px !important;
+    min-width:38px;
+    height:40px;
+    flex-basis:auto !important;
+    margin:0;
+    padding:3px 2px;
+    gap:1px;
+    font-size:.48rem;
+    line-height:1;
+    border-radius:6px;
+    letter-spacing:-.04em;
+    flex-direction:column;
+    justify-content:center;
+    overflow:hidden;
+  }
+  #tasks .input-group .open-toggle input{width:12px;height:12px;min-width:12px;margin:0}
+  #tasks .input-group .btn-del{width:30px;min-width:30px;padding:8px 0}
   .role-select{max-width:110px;font-size:.85rem}
   .table{font-size:.8rem}
   .table th, .table td{padding:6px 4px}
@@ -105,11 +133,20 @@ body.mode-group .all-only{display:none !important}
   .table th:nth-child(2), .table td:nth-child(2){width:60%;word-break:break-word}
   .table th:nth-child(3), .table td:nth-child(3){width:15%;text-align:center;font-size:.75rem}
   .table td:nth-child(2) br{display:block;margin:2px 0}
+  .program-seg{grid-template-columns:1fr;gap:1px;margin-bottom:7px}
+  .program-time{text-align:left;font-size:.82rem;white-space:normal;padding-left:10px;border-left:2px solid var(--border)}
   .b1-list .b1-row{flex-direction:column;align-items:flex-start;gap:4px}
 }
 @media(max-width:380px){
-  #tasks .input-group input[type="text"]{min-width:100px;font-size:.9rem}
-  #tasks .input-group input[type="number"]{min-width:70px;font-size:.9rem}
+  #tasks .input-group{
+    grid-template-columns:minmax(150px,1fr) 46px 34px 28px;
+    gap:4px;
+  }
+  #tasks .input-group input[type="text"]{font-size:.88rem;padding:9px 6px}
+  #tasks .input-group input[type="number"]{width:46px;min-width:46px;font-size:.74rem;padding:9px 3px}
+  #tasks .input-group .open-toggle{width:34px !important;min-width:34px;height:38px;font-size:.43rem;padding:2px 1px;gap:1px}
+  #tasks .input-group .open-toggle input{width:11px;height:11px;min-width:11px}
+  #tasks .input-group .btn-del{width:28px;min-width:28px}
   .role-select{max-width:90px;font-size:.8rem;padding:6px}
 }
 </style>
@@ -119,7 +156,7 @@ body.mode-group .all-only{display:none !important}
 
 <div class="container" id="container">
   <header>
-    <h1>✈️ Adam Saat Dağıtma Uygulaması – v21.5</h1>
+    <h1>✈️ Adam Saat Dağıtma Uygulaması – v21.8</h1>
     <div class="small">|Geliştirici: ovar@thy.com|</div>
   </header>
 
@@ -200,7 +237,7 @@ body.mode-group .all-only{display:none !important}
   <div id="results"></div>
 
   <div class="card">
-    <button class="btn-plan" id="planBtn">🚀 İş Planını Oluştur (v21.5)</button>
+    <button class="btn-plan" id="planBtn">🚀 İş Planını Oluştur (v21.8)</button>
   </div>
 </div>
 
@@ -1620,7 +1657,7 @@ function plan(){
     let segText;
     if (p.segs.length) {
       segText = p.segs.map(s => {
-        let line = `${escHtml(s.task)}: ${m2t(s.start)} - ${m2t(s.end)}`;
+        let line = `<div class="program-seg"><span class="program-task">${escHtml(s.task)}</span><span class="program-time">${m2t(s.start)} - ${m2t(s.end)}</span></div>`;
         if (isGroup && p.role === 'regular') {
           const attr = attributeSupervision(s._ws, s._we, techObjs, techRoles, technicians);
           if (attr.covered.length > 0) {

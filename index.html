@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Uçak Bakım İş Planlama Sistemi – v21.5</title>
+<title>Uçak Bakım İş Planlama Sistemi – v21.9</title>
 <style>
 .home-btn {
   position: fixed; top: 15px; left: 15px;
@@ -84,10 +84,24 @@ body.mode-group .all-only{display:none !important}
 .cov-list{display:flex;flex-direction:column;gap:6px;margin-top:6px}
 .cov-list .cov-row{display:flex;align-items:center;gap:10px;background:var(--panel);padding:8px 12px;border-radius:8px;border-left:4px solid var(--accent)}
 
-.program-seg{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:start;margin-bottom:4px;line-height:1.35}
+.program-seg{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:start;margin-bottom:8px;line-height:1.38;padding:7px 8px;border-radius:8px;background:rgba(15,23,42,.22);border:1px solid rgba(148,163,184,.18)}
 .program-seg:last-child{margin-bottom:0}
-.program-task{min-width:0;word-break:break-word;overflow-wrap:anywhere}
-.program-time{white-space:nowrap;color:var(--muted);font-weight:700;text-align:right}
+.program-task{min-width:0;word-break:break-word;overflow-wrap:anywhere;font-size:.96rem}
+.program-time{white-space:nowrap;color:#e2e8f0;font-weight:800;text-align:right;font-size:1rem;letter-spacing:.01em}
+.program-tech-cell{min-width:128px}
+.program-tech-name{display:block;font-weight:800;margin-bottom:5px;word-break:break-word}
+.program-role-tag{display:inline-flex;align-items:center;white-space:nowrap;max-width:none;font-size:.68rem;line-height:1;padding:4px 7px;margin-left:0}
+.table.program-table{border-collapse:separate;border-spacing:0 8px;margin-top:12px}
+.table.program-table th{border-bottom:2px solid rgba(255,255,255,.16)}
+.table.program-table td{border-top:1px solid rgba(148,163,184,.28);border-bottom:1px solid rgba(15,23,42,.55)}
+.table.program-table tr:nth-child(even) td{background:#253449}
+.table.program-table tr:nth-child(odd) td{background:#1f2d40}
+.table.program-table td:first-child{border-left:4px solid rgba(59,130,246,.75);border-top-left-radius:10px;border-bottom-left-radius:10px}
+.table.program-table td:last-child{border-top-right-radius:10px;border-bottom-right-radius:10px}
+.b1-main-line{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;width:100%}
+.b1-meta-line{margin-top:5px}
+.b1-list .b1-row{display:block}
+.b1-list .b1-row .b1-time{font-size:1rem;font-weight:800;color:#e2e8f0;white-space:nowrap}
 
 .table th:nth-child(1), .table td:nth-child(1) { width: 22%; }
 .table th:nth-child(2), .table td:nth-child(2) { width: 63%; }
@@ -133,8 +147,12 @@ body.mode-group .all-only{display:none !important}
   .table th:nth-child(2), .table td:nth-child(2){width:60%;word-break:break-word}
   .table th:nth-child(3), .table td:nth-child(3){width:15%;text-align:center;font-size:.75rem}
   .table td:nth-child(2) br{display:block;margin:2px 0}
-  .program-seg{grid-template-columns:1fr;gap:1px;margin-bottom:7px}
-  .program-time{text-align:left;font-size:.82rem;white-space:normal;padding-left:10px;border-left:2px solid var(--border)}
+  .program-seg{grid-template-columns:1fr;gap:4px;margin-bottom:8px;padding:8px}
+  .program-time{text-align:left;font-size:.98rem;white-space:normal;padding-left:10px;border-left:3px solid var(--accent)}
+  .program-task{font-size:.94rem}
+  .program-tech-cell{min-width:96px}
+  .program-role-tag{font-size:.62rem;padding:3px 5px}
+  .b1-main-line{flex-direction:column;gap:3px}
   .b1-list .b1-row{flex-direction:column;align-items:flex-start;gap:4px}
 }
 @media(max-width:380px){
@@ -156,7 +174,7 @@ body.mode-group .all-only{display:none !important}
 
 <div class="container" id="container">
   <header>
-    <h1>✈️ Adam Saat Dağıtma Uygulaması – v21.8</h1>
+    <h1>✈️ Adam Saat Dağıtma Uygulaması – v21.9</h1>
     <div class="small">|Geliştirici: ovar@thy.com|</div>
   </header>
 
@@ -1651,7 +1669,7 @@ function plan(){
       <label class="small" style="display:block;margin-bottom:6px;color:var(--muted)">Opsiyonel Not</label>
       <textarea data-field="program-note" placeholder="Planla ilgili not ekle...">${escHtml(programNote)}</textarea>
     </div>
-    <table class="table"><tr><th>Teknisyen</th><th>İşler (zaman aralıkları)</th><th>Toplam (saat)</th></tr>`;
+    <table class="table program-table"><tr><th>Teknisyen</th><th>İşler (zaman aralıkları)</th><th>Toplam (saat)</th></tr>`;
   perTech.forEach(p=>{
     p.segs.sort((a,b)=>a.start - b.start);
     let segText;
@@ -1673,8 +1691,8 @@ function plan(){
     } else {
       segText = '<em style="color:var(--danger)">⚠ Atanmış iş yok</em>';
     }
-    const roleTag = isGroup ? `<span class="role-tag ${p.role}">${p.role === 'supervisor' ? 'Supervisor' : p.role === 'qualified' ? 'Kalifiyeli' : 'Teknisyen'}</span>` : '';
-    techHtml += `<tr><td><strong>${escHtml(p.name)}</strong>${roleTag}</td><td>${segText}</td><td><strong>${minutesToHoursStr(p.total)}</strong></td></tr>`;
+    const roleTag = isGroup ? `<span class="role-tag program-role-tag ${p.role}">${p.role === 'supervisor' ? 'Supervisor' : p.role === 'qualified' ? 'Kalifiyeli' : 'Teknisyen'}</span>` : '';
+    techHtml += `<tr><td class="program-tech-cell"><span class="program-tech-name">${escHtml(p.name)}</span>${roleTag}</td><td>${segText}</td><td><strong>${minutesToHoursStr(p.total)}</strong></td></tr>`;
   });
   techHtml += `</table></div></details>`;
   html += techHtml;
@@ -1694,8 +1712,8 @@ function plan(){
         const isOpenB1 = tasksCopy.find(t => t.id === s.taskId)?.isOpen;
         const tag = isB1Only ? '<span class="b1-only-tag">B1-only</span>' : (isOpenB1 ? '<span class="b1-only-tag">OPEN fill</span>' : '');
         return `<div class="b1-row${isB1Only ? ' b1-only' : ''}">
-          <div><span class="b1-task">${escHtml(s.taskName)}</span> ${tag}</div>
-          <div class="b1-time">${realStart} - ${realEnd}</div>
+          <div class="b1-main-line"><span class="b1-task">${escHtml(s.taskName)}</span><span class="b1-time">${realStart} - ${realEnd}</span></div>
+          ${tag ? `<div class="b1-meta-line">${tag}</div>` : ''}
         </div>`;
       }).join('') + '</div>';
     } else {
@@ -1712,19 +1730,13 @@ function plan(){
   }
 
   // Group: supervisor coverage windows card
+  // Normal durumda gösterilmez; sadece Supervisor denetim penceresi hiç oluşmadıysa hata kartı olarak gösterilir.
   if (isGroup) {
     const coverage = buildSupervisorCoverage(techObjs, techRoles);
-    let covHtml = '';
     if (coverage.length === 0) {
-      covHtml = '<div class="warning" style="margin-top:0">⚠ Hiçbir Supervisor’e iş atanamadığı için denetim aralığı oluşmadı.</div>';
-    } else {
-      covHtml = '<div class="small" style="color:var(--muted);margin-bottom:8px">Bu aralıklarda en az bir Supervisor çalışıyor — Teknisyen rolündekiler bu pencereler içinde iş alabilir.</div>';
-      covHtml += '<div class="cov-list">' + coverage.map(([s,e]) => {
-        const len = ((e - s) / 60).toFixed(2);
-        return `<div class="cov-row">🛡 <strong>${m2t(workToReal(s))} - ${m2t(workToReal(e))}</strong> <span class="small">(${len} saat)</span></div>`;
-      }).join('') + '</div>';
+      const covHtml = '<div class="warning" style="margin-top:0">⚠ Hiçbir Supervisor’e iş atanamadığı için denetim aralığı oluşmadı.</div>';
+      html += `<div class="card"><h2>🛡 Supervisor Denetim Pencereleri</h2>${covHtml}</div>`;
     }
-    html += `<div class="card"><h2>🛡 Supervisor Denetim Pencereleri</h2>${covHtml}</div>`;
   }
 
   // --- Warnings ---

@@ -1081,8 +1081,33 @@ function plan(){
           }
         }
 
+        if(!placed && !isOpenFill) {
+          // Son şans: büyük işin tamamını B1-only yapmadan önce 15dk parçalar halinde
+          // tüm teknisyen boşluklarını kullanmayı dene. Böylece yüksek saatli işler tek parça
+          // yerleşemediği için tamamen B1'e taşınmaz.
+          const finalSize = Math.min(15, remainingWork);
+          const tinyCandidates = pickCandidates();
+          for (const tech of tinyCandidates) {
+            let result;
+            if (isGroup && tech.role === 'supervisor') {
+              result = placeSupervisorSmart(tech, finalSize, task.id, task.name, techObjs, techRoles);
+            } else if (isGroup && tech.role === 'regular') {
+              const cov = buildSupervisorCoverage(techObjs, techRoles);
+              if (cov.length > 0) result = placeOnTech(tech, finalSize, task.id, task.name, { coverage: cov });
+            } else {
+              result = placeOnTech(tech, finalSize, task.id, task.name);
+            }
+            if (result) {
+              taskSegments.get(task.id).push({ techIndex: tech.index, start: result.start, end: result.end });
+              remainingWork -= finalSize;
+              placed = true;
+              break;
+            }
+          }
+        }
+
         if(!placed) {
-          if (!isOpenFill) unallocated.push({ taskId: task.id, task: task.name, minutes: remainingWork, reason: 'Yer bulunamadı' });
+          if (!isOpenFill) unallocated.push({ taskId: task.id, task: task.name, minutes: remainingWork, reason: 'Teknisyen kapasitesi doldu; mümkün olan kısım teknisyenlere dağıtıldı' });
           break;
         }
       }
@@ -1215,6 +1240,13 @@ function plan(){
     taskSegments.set(taskId, []);
   }
 
+  function assignedTaskMinutesOnTechnicians(taskId){
+    return techObjs.reduce((sum, tech) => sum + tech.segments.reduce((s, seg) => {
+      if (seg.taskId === taskId) return s + (seg.end - seg.start);
+      return s;
+    }, 0), 0);
+  }
+
   // ============================================================
   // B1 ZAMAN LİSTESİ – iki modda da aktif
   // ============================================================
@@ -1241,15 +1273,36 @@ function plan(){
       .filter(id => Number.isFinite(id) && !(tasksCopy.find(t => t.id === id)?.isOpen))));
 
     if (unallocatedTaskIds.length > 0) {
+      const partlyAssignedItems = [];
       const b1OnlyCandidates = unallocatedTaskIds
         .map(id => tasksCopy.find(t => t.id === id))
         .filter(Boolean)
+        .filter(task => {
+          const assigned = assignedTaskMinutesOnTechnicians(task.id);
+          if (assigned > 0) {
+            partlyAssignedItems.push({ task, assigned, missing: Math.max(0, task.techWorkMin - assigned) });
+            return false;
+          }
+          return true;
+        })
         .sort((a,b) => {
+          // B1-only yalnızca hiç teknisyen saati alamamış işler için son çare olarak çalışır.
+          // Seçim sırası küçük saatli işten büyüğe doğrudur.
           const durA = a.techWorkMin + a.headAlloc;
           const durB = b.techWorkMin + b.headAlloc;
           if (durA !== durB) return durA - durB;
           return a.id - b.id;
         });
+
+      for (const item of partlyAssignedItems) {
+        if (item.missing >= 15) {
+          finalUnallocated.push({
+            task: item.task.name,
+            minutes: item.missing,
+            reason: 'İşin mümkün olan kısmı teknisyenlere dağıtıldı; kalan kısım B1-only yapılmadı'
+          });
+        }
+      }
 
       for (const task of b1OnlyCandidates) {
         const fullB1Duration = Math.max(15, ceil15x(task.techWorkMin + task.headAlloc));
@@ -1306,8 +1359,13 @@ function plan(){
       for (const item of fallbackItems) {
         const task = item.taskObj;
         const fallbackDuration = Math.max(15, ceil15x(item.minutes || task.headAlloc || 15));
-        removeTaskFromTechnicians(task.id);
-        b1OnlyTaskIds.add(task.id);
+        const alreadyAssignedToTech = assignedTaskMinutesOnTechnicians(task.id) > 0;
+        // Eğer iş teknisyenlerde zaten yayılmışsa, sadece B1 onay süresini herhangi bir boşluğa koy.
+        // Tüm işi teknisyenlerden söküp B1-only yapmak verimsizliğe yol açıyordu.
+        if (!alreadyAssignedToTech) {
+          removeTaskFromTechnicians(task.id);
+          b1OnlyTaskIds.add(task.id);
+        }
         const attempt = placeOnTech(headObj, fallbackDuration, task.id, task.name);
         if (attempt) {
           headOverflowAssignments.push({ taskId: task.id, taskName: task.name, start: attempt.start, end: attempt.end, type: 'b1OnlyFallback' });

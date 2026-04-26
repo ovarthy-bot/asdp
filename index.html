@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Uçak Bakım İş Planlama Sistemi – v21.1</title>
+<title>Uçak Bakım İş Planlama Sistemi – v21.5</title>
 <style>
 .home-btn {
   position: fixed; top: 15px; left: 15px;
@@ -63,6 +63,8 @@ textarea{width:100%;min-height:90px;resize:vertical;font-family:inherit}
 .mode-row label.active{border-color:var(--accent);background:rgba(59,130,246,0.15);color:var(--accent)}
 
 .role-select{flex:0 0 auto;max-width:140px;padding:8px}
+.open-toggle{flex:0 0 auto;display:flex;align-items:center;gap:5px;background:rgba(245,158,11,.12);border:1px solid var(--warn);color:#fcd34d;border-radius:8px;padding:8px 10px;font-size:.8rem;font-weight:700;white-space:nowrap}
+.open-toggle input{accent-color:#f59e0b}
 .role-tag{display:inline-block;padding:2px 8px;border-radius:6px;font-size:.7rem;font-weight:700;margin-left:6px;letter-spacing:.02em}
 .role-tag.supervisor{background:rgba(59,130,246,0.18);color:#93c5fd;border:1px solid #3b82f6}
 .role-tag.qualified{background:rgba(16,185,129,0.18);color:#6ee7b7;border:1px solid #10b981}
@@ -117,7 +119,7 @@ body.mode-group .all-only{display:none !important}
 
 <div class="container" id="container">
   <header>
-    <h1>✈️ Adam Saat Dağıtma Uygulaması – v21.1</h1>
+    <h1>✈️ Adam Saat Dağıtma Uygulaması – v21.5</h1>
     <div class="small">|Geliştirici: ovar@thy.com|</div>
   </header>
 
@@ -198,7 +200,7 @@ body.mode-group .all-only{display:none !important}
   <div id="results"></div>
 
   <div class="card">
-    <button class="btn-plan" id="planBtn">🚀 İş Planını Oluştur (v21.1)</button>
+    <button class="btn-plan" id="planBtn">🚀 İş Planını Oluştur (v21.5)</button>
   </div>
 </div>
 
@@ -352,6 +354,7 @@ function renderTasks(){
     row.innerHTML = `
       <input type="text" data-i="${i}" data-field="name" value="${escHtml(t.name)}">
       <input type="number" step="0.25" min="0" data-i="${i}" data-field="hours" value="${t.hours}">
+      <label class="open-toggle" title="OPEN iş: önce zorunlu işler yerleşir; bu iş kalan boş zamanları doldurmak için kullanılır."><input type="checkbox" data-i="${i}" data-field="openTask" ${t.open ? 'checked' : ''}> OPEN</label>
       <button class="btn-del" data-del="${i}">×</button>
     `;
     tasksDiv.appendChild(row);
@@ -401,7 +404,8 @@ function renderHeadBlocks(){
 function updateTasksStat(){
   const count = tasks.length;
   const total = tasks.reduce((s,t)=> s + (parseFloat(t.hours)||0), 0);
-  tasksStatDiv.innerHTML = `Toplam İş: <strong>${count}</strong> – Toplam Süre (girdi): <strong>${total.toFixed(2)} saat</strong>`;
+  const openCount = tasks.filter(t => !!t.open).length;
+  tasksStatDiv.innerHTML = `Toplam İş: <strong>${count}</strong> – Toplam Süre (girdi): <strong>${total.toFixed(2)} saat</strong>${openCount ? ` – OPEN: <strong>${openCount}</strong>` : ''}`;
 }
 
 function updateTechsStat(){
@@ -431,7 +435,7 @@ updateB1Summary();
 updateBusySummary();
 
 // ---- Buttons ----
-$('addTask').addEventListener('click', ()=>{ tasks.push({ name:`NRC ${tasks.length+1}`, hours:1.0 }); renderTasks(); });
+$('addTask').addEventListener('click', ()=>{ tasks.push({ name:`NRC ${tasks.length+1}`, hours:1.0, open:false }); renderTasks(); });
 $('addTech').addEventListener('click', ()=>{ technicians.push(`Teknisyen ${technicians.length+1}`); techBlocks.push([]); techRoles.push('regular'); renderTechs(); renderTechBlocks(); });
 $('resetTasks').addEventListener('click', ()=>{ if(confirm('Tüm işleri sıfırlamak?')){ tasks=[]; renderTasks(); }});
 $('resetTechs').addEventListener('click', ()=>{ if(confirm('Tüm teknisyenleri sıfırlamak?')){ technicians=[]; techBlocks=[]; techRoles=[]; renderTechs(); renderTechBlocks(); }});
@@ -507,6 +511,13 @@ mainContainer.addEventListener('input', e => {
 mainContainer.addEventListener('change', e => {
   const f = e.target.dataset.field;
   const i = +e.target.dataset.i;
+  if (f === 'openTask' && Number.isFinite(i)) {
+    tasks[i].open = !!e.target.checked;
+    save('asdp_tasks', tasks);
+    updateTasksStat();
+    renderDupeWarning();
+    return;
+  }
   if (f === 'techRole' && Number.isFinite(i)) {
     normalizeTechRoles();
     techRoles[i] = e.target.value;
@@ -933,19 +944,21 @@ function plan(){
     const rawMin = Math.round(inputHours * 60);
     const headAlloc = Math.min(HEAD_MIN, rawMin);
     const techWorkMin = Math.max(0, rawMin - headAlloc);
-    return { id: idx, name: t.name, inputHours, rawMin, headAlloc,
+    return { id: idx, name: t.name, inputHours, rawMin, headAlloc, isOpen: !!t.open,
       techWorkMinOriginal: techWorkMin, techWorkMinBeforeRound: techWorkMin, techWorkMin };
   });
 
-  const totalTechWorkNeeded = rawTasks.reduce((s, t) => s + t.techWorkMinOriginal, 0);
+  const mandatoryTechWorkNeeded = rawTasks.filter(t => !t.isOpen).reduce((s, t) => s + t.techWorkMinOriginal, 0);
+  const openTechWorkNeeded = rawTasks.filter(t => t.isOpen).reduce((s, t) => s + t.techWorkMinOriginal, 0);
+  const totalTechWorkNeeded = mandatoryTechWorkNeeded + openTechWorkNeeded;
 
   let reductionRatio = 1.0;
   let capacityExceeded = false;
-  if (totalTechWorkNeeded > totalCapacityMin && totalTechWorkNeeded > 0) {
+  if (mandatoryTechWorkNeeded > totalCapacityMin && mandatoryTechWorkNeeded > 0) {
     capacityExceeded = true;
-    reductionRatio = (totalCapacityMin * 0.95) / totalTechWorkNeeded;
+    reductionRatio = (totalCapacityMin * 0.95) / mandatoryTechWorkNeeded;
     rawTasks.forEach(task => {
-      if (task.techWorkMinOriginal > 0) {
+      if (!task.isOpen && task.techWorkMinOriginal > 0) {
         const reduced = Math.max(Math.min(15, task.techWorkMinOriginal),
           Math.round(task.techWorkMinOriginal * reductionRatio));
         task.techWorkMinBeforeRound = reduced;
@@ -957,6 +970,16 @@ function plan(){
   const roundingAdjustments = [];
   rawTasks.forEach(task => {
     if (task.techWorkMin <= 0) return;
+
+    // OPEN işler kapasite küçültme/yuvarlama raporuna dahil edilmez.
+    // Ama uygulamadaki tüm atamalar 15dk katı kalacağı için OPEN havuzu
+    // girilen sürenin 15dk katına yuvarlanmış tam kapasitesiyle kullanılabilir.
+    if (task.isOpen) {
+      task.techWorkMinBeforeRound = task.techWorkMinOriginal;
+      task.techWorkMin = Math.max(15, ceil15x(task.techWorkMinOriginal));
+      return;
+    }
+
     const before = task.techWorkMin;
     let rounded = round15(before);
     if (rounded === 0 && before > 0) rounded = 15;
@@ -966,11 +989,12 @@ function plan(){
   });
 
   const totalAfterRound = rawTasks.reduce((s, t) => s + t.techWorkMin, 0);
-  if (totalAfterRound > totalCapacityMin) {
-    const upRounded = rawTasks
+  const mandatoryAfterRound = rawTasks.filter(t => !t.isOpen).reduce((s, t) => s + t.techWorkMin, 0);
+  if (mandatoryAfterRound > totalCapacityMin) {
+    const upRounded = rawTasks.filter(t => !t.isOpen)
       .filter(t => t.techWorkMin > floor15(t.techWorkMinBeforeRound) && t.techWorkMin > 15)
       .sort((a, b) => (b.techWorkMin - b.techWorkMinBeforeRound) - (a.techWorkMin - a.techWorkMinBeforeRound));
-    let excess = totalAfterRound - Math.floor(totalCapacityMin * 0.95 / 15) * 15;
+    let excess = mandatoryAfterRound - Math.floor(totalCapacityMin * 0.95 / 15) * 15;
     for (const task of upRounded) {
       if (excess <= 0) break;
       const floored = Math.max(15, floor15(task.techWorkMinBeforeRound));
@@ -1014,53 +1038,64 @@ function plan(){
     });
   }
 
-  for(const task of tasksCopy){
-    const techWork = task.techWorkMin;
-    if(techWork === 0) continue;
+  function scheduleTaskList(taskList, options){
+    options = options || {};
+    const isOpenFill = !!options.openFill;
+    for(const task of taskList){
+      const techWork = task.techWorkMin;
+      if(techWork === 0) continue;
 
-    let remainingWork = techWork;
-    while(remainingWork > 0) {
-      let targetBlockSize = Math.max(30, Math.ceil(remainingWork / Math.max(1, technicians.length)));
-      targetBlockSize = ceil15x(targetBlockSize);
-      let blockSize = Math.min(targetBlockSize, remainingWork);
-      blockSize = Math.max(15, round15(blockSize));
-      if (blockSize > remainingWork) blockSize = remainingWork;
+      let remainingWork = techWork;
+      while(remainingWork > 0) {
+        let targetBlockSize = isOpenFill ? 15 : Math.max(30, Math.ceil(remainingWork / Math.max(1, technicians.length)));
+        targetBlockSize = ceil15x(targetBlockSize);
+        let blockSize = Math.min(targetBlockSize, remainingWork);
+        blockSize = Math.max(15, round15(blockSize));
+        if (blockSize > remainingWork) blockSize = remainingWork;
 
-      const candidates = pickCandidates();
+        const candidates = pickCandidates();
+        let placed = false;
+        const maxAttempts = isOpenFill ? 1 : 2;
+        for(let attempt = 0; attempt < maxAttempts && !placed; attempt++){
+          const trySize = (attempt === 0) ? blockSize : Math.max(15, floor15(blockSize * 0.7));
+          const finalSize = Math.min(trySize, remainingWork);
+          if (finalSize < 15) break;
 
-      let placed = false;
-      for(let attempt = 0; attempt < 2 && !placed; attempt++){
-        const trySize = (attempt === 0) ? blockSize : Math.max(15, floor15(blockSize * 0.7));
-        const finalSize = Math.min(trySize, remainingWork);
-        if (finalSize < 15) break;
-
-        for (const tech of candidates) {
-          let result;
-          if (isGroup && tech.role === 'supervisor') {
-            result = placeSupervisorSmart(tech, finalSize, task.id, task.name, techObjs, techRoles);
-          } else if (isGroup && tech.role === 'regular') {
-            const cov = buildSupervisorCoverage(techObjs, techRoles);
-            if (cov.length > 0) result = placeOnTech(tech, finalSize, task.id, task.name, { coverage: cov });
-            if (!result) result = placeOnTech(tech, finalSize, task.id, task.name);
-          } else {
-            result = placeOnTech(tech, finalSize, task.id, task.name);
-          }
-          if (result) {
-            taskSegments.get(task.id).push({ techIndex: tech.index, start: result.start, end: result.end });
-            remainingWork -= finalSize;
-            placed = true;
-            break;
+          for (const tech of candidates) {
+            let result;
+            if (isGroup && tech.role === 'supervisor') {
+              result = placeSupervisorSmart(tech, finalSize, task.id, task.name, techObjs, techRoles);
+            } else if (isGroup && tech.role === 'regular') {
+              const cov = buildSupervisorCoverage(techObjs, techRoles);
+              if (cov.length > 0) result = placeOnTech(tech, finalSize, task.id, task.name, { coverage: cov });
+              if (!result && !isOpenFill) result = placeOnTech(tech, finalSize, task.id, task.name);
+            } else {
+              result = placeOnTech(tech, finalSize, task.id, task.name);
+            }
+            if (result) {
+              taskSegments.get(task.id).push({ techIndex: tech.index, start: result.start, end: result.end });
+              remainingWork -= finalSize;
+              placed = true;
+              break;
+            }
           }
         }
-      }
 
-      if(!placed) {
-        unallocated.push({ taskId: task.id, task: task.name, minutes: remainingWork, reason: 'Yer bulunamadı' });
-        break;
+        if(!placed) {
+          if (!isOpenFill) unallocated.push({ taskId: task.id, task: task.name, minutes: remainingWork, reason: 'Yer bulunamadı' });
+          break;
+        }
       }
     }
   }
 
+  const mandatoryTasks = tasksCopy.filter(t => !t.isOpen).sort((a, b) => b.techWorkMin - a.techWorkMin);
+  const openTasks = tasksCopy.filter(t => t.isOpen).sort((a, b) => a.techWorkMin - b.techWorkMin || a.id - b.id);
+
+  // Önce sadece zorunlu/sabit işler yerleşir.
+  // OPEN işler bu aşamada kesinlikle kapasite baskısı oluşturmaz;
+  // dengeleme ve gözetmenlik onarımından sonra kalan boş aralıkları doldurmak için kullanılır.
+  scheduleTaskList(mandatoryTasks, { openFill:false });
   mergeAndRecompute(techObjs);
 
   // --- Coverage repair (group) ---
@@ -1118,6 +1153,11 @@ function plan(){
   ensureNoIdleTech(techObjs, techRoles, isGroup);
   if (isGroup) repairCoverage(techObjs, techRoles);
   mergeAndRecompute(techObjs);
+
+  // --- OPEN filler ---
+  // OPEN işler artık burada erken dağıtılmaz.
+  // Önce zorunlu işler + B1 zorunlu onay/B1-only planı tamamlanır.
+  // Daha sonra ortak OPEN havuzu B1 dahil tüm boş zamanları doldurmak için kullanılır.
 
   // --- Recompute timelines ---
   let taskFinalEnd = new Map();
@@ -1198,7 +1238,7 @@ function plan(){
 
     const unallocatedTaskIds = Array.from(new Set(unallocated
       .map(u => Number.isFinite(u.taskId) ? u.taskId : (tasksCopy.find(t => t.name === u.task)?.id))
-      .filter(id => Number.isFinite(id))));
+      .filter(id => Number.isFinite(id) && !(tasksCopy.find(t => t.id === id)?.isOpen))));
 
     if (unallocatedTaskIds.length > 0) {
       const b1OnlyCandidates = unallocatedTaskIds
@@ -1227,7 +1267,7 @@ function plan(){
     mergeAndRecompute(techObjs);
     recomputeTaskTimeline();
 
-    const tasksForHead = tasksCopy.slice().sort((a,b)=>{
+    const tasksForHead = tasksCopy.filter(t => !t.isOpen).slice().sort((a,b)=>{
       const A = taskFinalEnd.get(a.id), B = taskFinalEnd.get(b.id);
       if(A===null && B===null) return 0;
       if(A===null) return 1;
@@ -1236,7 +1276,7 @@ function plan(){
     });
 
     for(const t of tasksForHead){
-      if (b1OnlyTaskIds.has(t.id)) continue;
+      if (b1OnlyTaskIds.has(t.id) || t.isOpen) continue;
       const headNeeded = t.headAlloc;
       if(headNeeded <= 0) continue;
       const taskEnd = taskFinalEnd.get(t.id);
@@ -1277,12 +1317,106 @@ function plan(){
       }
     }
 
+    // OPEN işler zorunlu işlerden sonra ortak havuz olarak kullanılır.
+    // Bu havuz kapasite aşımında küçültülmez ve B1 dahil tüm eksik/boş zamanları doldurmaya çalışır.
+    function mergeSingleSchedule(obj){
+      if (!obj) return;
+      obj.segments.sort((a,b)=>a.start - b.start || a.end - b.end);
+      const merged = [];
+      for (const s of obj.segments) {
+        const last = merged[merged.length - 1];
+        if (last && last.taskId === s.taskId && last.end === s.start) {
+          last.end = s.end;
+        } else {
+          merged.push({...s});
+        }
+      }
+      obj.segments = merged;
+      obj.totalMin = obj.segments.reduce((sum, seg) => seg.taskId === -1 ? sum : sum + (seg.end - seg.start), 0);
+    }
+
+    function getOpenPool(){
+      return tasksCopy
+        .filter(t => t.isOpen && t.rawMin > 0)
+        .sort((a,b) => Math.max(15, ceil15x(a.rawMin)) - Math.max(15, ceil15x(b.rawMin)) || a.id - b.id)
+        .map(t => ({ task: t, remaining: Math.max(15, ceil15x(t.rawMin)) }));
+    }
+
+    function remainingOpenPool(pool){
+      return pool.reduce((sum, item) => sum + Math.max(0, item.remaining), 0);
+    }
+
+    function nextOpenItem(pool){
+      return pool.find(item => item.remaining >= 15) || null;
+    }
+
+    function findOpenSlotForTarget(target){
+      const free = getFreeIntervals(target.obj);
+      for (const [fs, fe] of free) {
+        let cursor = fs;
+        while (cursor + 15 <= fe) {
+          if (isGroup && target.role === 'regular') {
+            const coverage = buildSupervisorCoverage(techObjs, techRoles);
+            const ok = coverage.some(([cs, ce]) => cursor >= cs && (cursor + 15) <= ce);
+            if (!ok) { cursor += 15; continue; }
+          }
+          return { start: cursor, end: cursor + 15 };
+        }
+      }
+      return null;
+    }
+
+    function fillAllOpenGapsFromPool(){
+      const pool = getOpenPool();
+      let guard = 0;
+      while (remainingOpenPool(pool) >= 15 && guard < 20000) {
+        guard++;
+        const targets = techObjs.map(t => ({ obj: t, role: isGroup ? (techRoles[t.index] || 'regular') : 'all', isHead:false }))
+          .concat([{ obj: headObj, role:'head', isHead:true }])
+          .sort((a,b) => {
+            const aFree = getFreeIntervals(a.obj).reduce((s,[x,y]) => s + (y-x), 0);
+            const bFree = getFreeIntervals(b.obj).reduce((s,[x,y]) => s + (y-x), 0);
+            if ((a.obj.totalMin || 0) !== (b.obj.totalMin || 0)) return (a.obj.totalMin || 0) - (b.obj.totalMin || 0);
+            return bFree - aFree;
+          });
+
+        let placed = false;
+        for (const target of targets) {
+          const item = nextOpenItem(pool);
+          if (!item) break;
+          const slot = findOpenSlotForTarget(target);
+          if (!slot) continue;
+          target.obj.segments.push({ start: slot.start, end: slot.end, taskId: item.task.id, taskName: item.task.name });
+          target.obj.totalMin = (target.obj.totalMin || 0) + 15;
+          if (target.isHead) {
+            headAssignments.push({ taskId: item.task.id, taskName: item.task.name, start: slot.start, end: slot.end, type: 'openB1Fill' });
+          } else {
+            const arr = taskSegments.get(item.task.id) || [];
+            arr.push({ techIndex: target.obj.index, start: slot.start, end: slot.end });
+            taskSegments.set(item.task.id, arr);
+          }
+          item.remaining -= 15;
+          placed = true;
+          break;
+        }
+        if (!placed) break;
+        mergeAndRecompute(techObjs);
+        mergeSingleSchedule(headObj);
+        if (isGroup) repairCoverage(techObjs, techRoles);
+      }
+      mergeAndRecompute(techObjs);
+      mergeSingleSchedule(headObj);
+      return pool;
+    }
+
+    const openPoolAfterFill = fillAllOpenGapsFromPool();
+
     const taskIdsWithB1 = new Set(headObj.segments.filter(s => s.taskId !== -1 && s.taskId != null).map(s => s.taskId));
     const removedByB1Rule = new Set();
     techObjs.forEach(tech => {
       const kept = [];
       for (const seg of tech.segments) {
-        if (seg.taskId === -1 || seg.taskId == null || taskIdsWithB1.has(seg.taskId)) kept.push(seg);
+        if (seg.taskId === -1 || seg.taskId == null || taskIdsWithB1.has(seg.taskId) || (tasksCopy.find(t => t.id === seg.taskId)?.isOpen)) kept.push(seg);
         else removedByB1Rule.add(seg.taskId);
       }
       tech.segments = kept;
@@ -1357,10 +1491,10 @@ function plan(){
     const role = isGroup ? `<span class="role-tag ${techRoles[i] || 'regular'}">${techRoles[i] === 'supervisor' ? 'Supervisor' : techRoles[i] === 'qualified' ? 'Kalifiyeli' : 'Teknisyen'}</span>` : '';
     return `<tr><td><strong>${escHtml(name)}</strong>${role}</td><td>${busyH}</td><td>${freeH}</td></tr>`;
   }).join('');
-  html += `<div class="card"><h2>⏱️ Teknisyen Net Kapasite Kontrolü</h2>
+  html += `<details class="collapsible" open><summary>⏱️ Teknisyen Net Kapasite Kontrolü</summary><div class="body">
     <div class="small" style="color:var(--muted);margin-bottom:8px">Dolu saatler iş ataması için kapalıdır ve toplam yüke eklenmez.</div>
     <table class="table"><tr><th>Teknisyen</th><th>Dolu Saat</th><th>Kullanılabilir Saat</th></tr>${busyRows}</table>
-  </div>`;
+  </div></details>`;
 
   // Capacity scaling note
   if (capacityExceeded) {
@@ -1383,15 +1517,15 @@ function plan(){
       }
     });
     detailHtml += '</table>';
-    html += `<div class="capacity-info">
-      <strong>📊 Kapasite Aşımı – Orantılı Küçültme + 15dk Yuvarlama Uygulandı</strong><br>
+    html += `<details class="collapsible" open><summary>📊 Kapasite Aşımı – Orantılı Küçültme + 15dk Yuvarlama Uygulandı</summary><div class="body capacity-info">
+      <strong>Zorunlu iş kapasitesi aştığı için orantılı küçültme uygulandı.</strong><br>
       <span class="small" style="color:var(--muted)">
         Toplam net kapasite: <strong>${capHours} saat</strong><br>
         Toplam iş yükü (orijinal): <strong>${needHours} saat</strong><br>
         Planlanan toplam: <strong>${plannedHours} saat</strong><br>
         <span style="color:var(--danger)">➜ Tüm işler orantılı olarak <strong>~%${reductionPct}</strong> küçültüldü.</span>
       </span>${detailHtml}
-    </div>`;
+    </div></details>`;
   } else {
     const capHours = (totalCapacityMin / 60).toFixed(2);
     const needHours = (totalTechWorkNeeded / 60).toFixed(2);
@@ -1407,16 +1541,17 @@ function plan(){
         return `<span style="color:var(--muted);font-size:0.85em">  • ${escHtml(adj.name)}: ${(adj.before/60).toFixed(2)} → ${(adj.after/60).toFixed(2)} saat (${sign}${adj.diff} dk)</span>`;
       }).join('<br>');
     }
-    html += `<div class="note">
-      <strong>✅ Kapasite Yeterli</strong><br>
+    html += `<details class="collapsible" open><summary>✅ Kapasite Yeterli</summary><div class="body note">
+      <strong>Kapasite yeterli</strong><br>
       <span class="small" style="color:var(--muted)">
-        Net kapasite: ${capHours} saat – İhtiyaç: ${needHours} saat – Planlanan: ${plannedHours} saat – Kullanım: %${usagePct}
+        Net kapasite: ${capHours} saat – İhtiyaç: ${needHours} saat – Planlanan: ${plannedHours} saat – Kullanım: %${usagePct}<br>
+        OPEN işler kapasite küçültmesine dahil edilmez; zorunlu işler bittikten sonra kalan teknisyen ve B1 boşluklarını doldurmak için kullanılır.
       </span>${roundingNote}
-    </div>`;
+    </div></details>`;
   }
 
   // Tech program table
-  let techHtml = `<div class="card"><h2>👷 Teknisyenlerin Programı</h2>
+  let techHtml = `<details class="collapsible" open><summary>👷 Teknisyenlerin Programı</summary><div class="body">
     <div style="margin:10px 0 14px 0">
       <label class="small" style="display:block;margin-bottom:6px;color:var(--muted)">Opsiyonel Not</label>
       <textarea data-field="program-note" placeholder="Planla ilgili not ekle...">${escHtml(programNote)}</textarea>
@@ -1446,7 +1581,7 @@ function plan(){
     const roleTag = isGroup ? `<span class="role-tag ${p.role}">${p.role === 'supervisor' ? 'Supervisor' : p.role === 'qualified' ? 'Kalifiyeli' : 'Teknisyen'}</span>` : '';
     techHtml += `<tr><td><strong>${escHtml(p.name)}</strong>${roleTag}</td><td>${segText}</td><td><strong>${minutesToHoursStr(p.total)}</strong></td></tr>`;
   });
-  techHtml += `</table></div>`;
+  techHtml += `</table></div></details>`;
   html += techHtml;
 
   // B1 card
@@ -1461,7 +1596,8 @@ function plan(){
         const realStart = m2t(workToReal(s.start));
         const realEnd = m2t(workToReal(s.end));
         const isB1Only = b1OnlyKeys.has(`${s.start}-${s.end}-${s.taskId}`);
-        const tag = isB1Only ? '<span class="b1-only-tag">B1-only</span>' : '';
+        const isOpenB1 = tasksCopy.find(t => t.id === s.taskId)?.isOpen;
+        const tag = isB1Only ? '<span class="b1-only-tag">B1-only</span>' : (isOpenB1 ? '<span class="b1-only-tag">OPEN fill</span>' : '');
         return `<div class="b1-row${isB1Only ? ' b1-only' : ''}">
           <div><span class="b1-task">${escHtml(s.taskName)}</span> ${tag}</div>
           <div class="b1-time">${realStart} - ${realEnd}</div>

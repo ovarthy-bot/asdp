@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Uçak Bakım İş Planlama Sistemi – v22.1</title>
+<title>Uçak Bakım İş Planlama Sistemi – v21.9</title>
 <style>
 .home-btn {
   position: fixed; top: 15px; left: 15px;
@@ -84,29 +84,24 @@ body.mode-group .all-only{display:none !important}
 .cov-list{display:flex;flex-direction:column;gap:6px;margin-top:6px}
 .cov-list .cov-row{display:flex;align-items:center;gap:10px;background:var(--panel);padding:8px 12px;border-radius:8px;border-left:4px solid var(--accent)}
 
-.program-tech-section{margin:14px 0;border:1px solid rgba(148,163,184,.30);border-radius:12px;overflow:hidden;box-shadow:0 6px 18px rgba(0,0,0,.16)}
-.program-tech-section:nth-child(odd){background:#182f4e}
-.program-tech-section:nth-child(even){background:#22476f}
-.program-tech-header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 12px;background:rgba(15,23,42,.34);border-bottom:1px solid rgba(148,163,184,.28)}
-.program-tech-name{font-weight:900;font-size:1rem;color:#f8fafc;word-break:break-word}
-.program-role-tag{display:inline-flex;align-items:center;white-space:nowrap;max-width:none;font-size:.72rem;line-height:1;padding:4px 8px;margin-left:8px}
-.table.program-table{border-collapse:collapse;margin:0;width:100%}
-.table.program-table th{background:rgba(245,158,11,.95);border-bottom:2px solid rgba(255,255,255,.14)}
-.table.program-table th:first-child,.table.program-table td:first-child{width:82%;text-align:left}
-.table.program-table th:last-child,.table.program-table td:last-child{width:18%;text-align:center;white-space:nowrap}
-.table.program-table td{background:transparent !important;border-bottom:1px solid rgba(148,163,184,.24);padding:9px 10px}
-.table.program-table tr:last-child td{border-bottom:none}
-.program-seg{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;align-items:center;margin-bottom:7px;line-height:1.35;padding:8px 10px;border-radius:9px;background:rgba(15,23,42,.20);border:1px solid rgba(226,232,240,.14)}
+.program-seg{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:start;margin-bottom:8px;line-height:1.38;padding:7px 8px;border-radius:8px;background:rgba(15,23,42,.22);border:1px solid rgba(148,163,184,.18)}
 .program-seg:last-child{margin-bottom:0}
-.program-task{min-width:0;word-break:break-word;overflow-wrap:anywhere;font-size:1rem;font-weight:650;color:#f8fafc}
-.program-time{white-space:nowrap;color:#f8fafc;font-weight:900;text-align:right;font-size:1.08rem;letter-spacing:.01em}
-.program-total-cell{font-size:1.02rem;font-weight:900;color:#f8fafc}
-.b1-main-line{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;width:100%}
-.b1-meta-line{margin-top:4px;display:flex;gap:6px;flex-wrap:wrap}
-.b1-list .b1-row{display:block;padding:9px 12px}
-.b1-list .b1-row .b1-task{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:1rem;font-weight:850;color:#f8fafc}
-.b1-list .b1-row .b1-time{font-size:1.02rem;font-weight:900;color:#e2e8f0;white-space:nowrap;text-align:right}
-.b1-list .b1-row .b1-only-tag{margin-left:0;margin-top:0}
+.program-task{min-width:0;word-break:break-word;overflow-wrap:anywhere;font-size:.96rem}
+.program-time{white-space:nowrap;color:#e2e8f0;font-weight:800;text-align:right;font-size:1rem;letter-spacing:.01em}
+.program-tech-cell{min-width:128px}
+.program-tech-name{display:block;font-weight:800;margin-bottom:5px;word-break:break-word}
+.program-role-tag{display:inline-flex;align-items:center;white-space:nowrap;max-width:none;font-size:.68rem;line-height:1;padding:4px 7px;margin-left:0}
+.table.program-table{border-collapse:separate;border-spacing:0 8px;margin-top:12px}
+.table.program-table th{border-bottom:2px solid rgba(255,255,255,.16)}
+.table.program-table td{border-top:1px solid rgba(148,163,184,.28);border-bottom:1px solid rgba(15,23,42,.55)}
+.table.program-table tr:nth-child(even) td{background:#253449}
+.table.program-table tr:nth-child(odd) td{background:#1f2d40}
+.table.program-table td:first-child{border-left:4px solid rgba(59,130,246,.75);border-top-left-radius:10px;border-bottom-left-radius:10px}
+.table.program-table td:last-child{border-top-right-radius:10px;border-bottom-right-radius:10px}
+.b1-main-line{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;width:100%}
+.b1-meta-line{margin-top:5px}
+.b1-list .b1-row{display:block}
+.b1-list .b1-row .b1-time{font-size:1rem;font-weight:800;color:#e2e8f0;white-space:nowrap}
 
 .table th:nth-child(1), .table td:nth-child(1) { width: 22%; }
 .table th:nth-child(2), .table td:nth-child(2) { width: 63%; }
@@ -152,18 +147,13 @@ body.mode-group .all-only{display:none !important}
   .table th:nth-child(2), .table td:nth-child(2){width:60%;word-break:break-word}
   .table th:nth-child(3), .table td:nth-child(3){width:15%;text-align:center;font-size:.75rem}
   .table td:nth-child(2) br{display:block;margin:2px 0}
-  .program-tech-header{align-items:flex-start;flex-direction:column;gap:6px;padding:10px}
-  .program-tech-name{font-size:1rem}
-  .program-role-tag{font-size:.68rem;padding:4px 7px;margin-left:0}
-  .table.program-table th:first-child,.table.program-table td:first-child{width:78%}
-  .table.program-table th:last-child,.table.program-table td:last-child{width:22%}
-  .program-seg{grid-template-columns:minmax(0,1fr) auto;gap:8px;margin-bottom:8px;padding:8px}
-  .program-time{text-align:right;font-size:1.02rem;white-space:nowrap;padding-left:0;border-left:none}
-  .program-task{font-size:.98rem}
-  .b1-main-line{grid-template-columns:minmax(0,1fr) auto;gap:8px}
-  .b1-list .b1-row{display:block}
-  .b1-list .b1-row .b1-task{font-size:.96rem}
-  .b1-list .b1-row .b1-time{font-size:.98rem}
+  .program-seg{grid-template-columns:1fr;gap:4px;margin-bottom:8px;padding:8px}
+  .program-time{text-align:left;font-size:.98rem;white-space:normal;padding-left:10px;border-left:3px solid var(--accent)}
+  .program-task{font-size:.94rem}
+  .program-tech-cell{min-width:96px}
+  .program-role-tag{font-size:.62rem;padding:3px 5px}
+  .b1-main-line{flex-direction:column;gap:3px}
+  .b1-list .b1-row{flex-direction:column;align-items:flex-start;gap:4px}
 }
 @media(max-width:380px){
   #tasks .input-group{
@@ -177,14 +167,6 @@ body.mode-group .all-only{display:none !important}
   #tasks .input-group .btn-del{width:28px;min-width:28px}
   .role-select{max-width:90px;font-size:.8rem;padding:6px}
 }
-
-@media(max-width:380px){
-  .b1-main-line{grid-template-columns:minmax(0,1fr) auto;gap:6px}
-  .b1-list .b1-row{padding:8px 9px}
-  .b1-list .b1-row .b1-task{font-size:.92rem}
-  .b1-list .b1-row .b1-time{font-size:.94rem}
-}
-
 </style>
 </head>
 <body class="mode-all">
@@ -192,7 +174,7 @@ body.mode-group .all-only{display:none !important}
 
 <div class="container" id="container">
   <header>
-    <h1>✈️ Adam Saat Dağıtma Uygulaması – v22.1</h1>
+    <h1>✈️ Adam Saat Dağıtma Uygulaması – v21.9</h1>
     <div class="small">|Geliştirici: ovar@thy.com|</div>
   </header>
 
@@ -1681,13 +1663,13 @@ function plan(){
     </div></details>`;
   }
 
-  // Tech program sections
+  // Tech program table
   let techHtml = `<details class="collapsible" open><summary>👷 Teknisyenlerin Programı</summary><div class="body">
     <div style="margin:10px 0 14px 0">
       <label class="small" style="display:block;margin-bottom:6px;color:var(--muted)">Opsiyonel Not</label>
       <textarea data-field="program-note" placeholder="Planla ilgili not ekle...">${escHtml(programNote)}</textarea>
     </div>
-    <div class="program-sections">`;
+    <table class="table program-table"><tr><th>Teknisyen</th><th>İşler (zaman aralıkları)</th><th>Toplam (saat)</th></tr>`;
   perTech.forEach(p=>{
     p.segs.sort((a,b)=>a.start - b.start);
     let segText;
@@ -1698,26 +1680,21 @@ function plan(){
           const attr = attributeSupervision(s._ws, s._we, techObjs, techRoles, technicians);
           if (attr.covered.length > 0) {
             const supList = attr.covered.map(c => `${escHtml(c.supName)} (${m2t(workToReal(c.start))}-${m2t(workToReal(c.end))})`).join(', ');
-            line += `<div class="small" style="color:#bfdbfe;margin:4px 0 8px 10px">↳ Denetim: ${supList}</div>`;
+            line += `<br><span class="small" style="color:var(--accent)">↳ Denetim: ${supList}</span>`;
           }
           if (!attr.fullyCovered) {
-            line += `<div class="small" style="color:var(--danger);margin:4px 0 8px 10px">⚠ Denetimsiz: ${m2t(workToReal(attr.uncoveredFrom))}-${m2t(workToReal(s._we))}</div>`;
+            line += `<br><span class="small" style="color:var(--danger)">⚠ Denetimsiz: ${m2t(workToReal(attr.uncoveredFrom))}-${m2t(workToReal(s._we))}</span>`;
           }
         }
         return line;
-      }).join('');
+      }).join('<br>');
     } else {
       segText = '<em style="color:var(--danger)">⚠ Atanmış iş yok</em>';
     }
     const roleTag = isGroup ? `<span class="role-tag program-role-tag ${p.role}">${p.role === 'supervisor' ? 'Supervisor' : p.role === 'qualified' ? 'Kalifiyeli' : 'Teknisyen'}</span>` : '';
-    techHtml += `<section class="program-tech-section">
-      <div class="program-tech-header"><div><span class="program-tech-name">${escHtml(p.name)}</span>${roleTag}</div><div class="small">Toplam: <strong>${minutesToHoursStr(p.total)} saat</strong></div></div>
-      <table class="table program-table"><tr><th>İşler (zaman aralıkları)</th><th>Toplam (saat)</th></tr>
-        <tr><td>${segText}</td><td class="program-total-cell"><strong>${minutesToHoursStr(p.total)}</strong></td></tr>
-      </table>
-    </section>`;
+    techHtml += `<tr><td class="program-tech-cell"><span class="program-tech-name">${escHtml(p.name)}</span>${roleTag}</td><td>${segText}</td><td><strong>${minutesToHoursStr(p.total)}</strong></td></tr>`;
   });
-  techHtml += `</div></div></details>`;
+  techHtml += `</table></div></details>`;
   html += techHtml;
 
   // B1 card
